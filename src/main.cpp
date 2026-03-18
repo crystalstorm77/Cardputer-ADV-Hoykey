@@ -28,3 +28,87 @@ bool isMouseMode(DeviceMode mode) {
     return mode == DeviceMode::Mouse;
 }
 // SEGMENT A END — Includes And Global State
+
+// SEGMENT B START — Transport Selection
+void selectMode() {
+    bool lastMode = !usbMode;
+
+    while (true) {
+        M5Cardputer.update();
+
+        if (lastMode != usbMode) {
+            displaySelectionScreen(usbMode);
+            lastMode = usbMode;
+        }
+
+        if (M5Cardputer.Keyboard.isChange() && M5Cardputer.Keyboard.isPressed()) {
+            Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+
+            if (M5Cardputer.Keyboard.isKeyPressed('.') || M5Cardputer.Keyboard.isKeyPressed(';')) {
+                usbMode = !usbMode;
+            }
+
+            if (status.enter) {
+                break;
+            }
+        }
+
+        delay(10);
+    }
+}
+// SEGMENT B END — Transport Selection
+
+// SEGMENT C START — Setup And Main Loop
+void setup() {
+    auto cfg = M5.config();
+    M5Cardputer.begin(cfg, true);
+
+    setupDisplay();
+    displayWelcomeScreen();
+    selectMode();
+
+    if (usbMode) {
+        USB.begin();
+    } else {
+        initBluetooth();
+    }
+
+    lastBluetoothStatus = getBluetoothStatus();
+    lastBatteryLevel = M5Cardputer.Power.getBatteryLevel();
+    lastBatteryRefreshMs = millis();
+
+    displayMainScreen(usbMode, currentMode, lastBluetoothStatus, lastBatteryLevel);
+}
+
+void loop() {
+    M5Cardputer.update();
+
+    const bool bluetoothStatus = getBluetoothStatus();
+
+    if (lastBluetoothStatus != bluetoothStatus) {
+        modeIndicator(usbMode, bluetoothStatus);
+        lastBluetoothStatus = bluetoothStatus;
+    }
+
+    if (M5Cardputer.BtnA.wasPressed()) {
+        currentMode = nextMode(currentMode);
+        drawModeCards(currentMode);
+    }
+
+    const unsigned long now = millis();
+    if ((now - lastBatteryRefreshMs) >= 1000UL) {
+        const int batteryLevel = M5Cardputer.Power.getBatteryLevel();
+        if (batteryLevel != lastBatteryLevel) {
+            drawBatteryLevel(batteryLevel);
+            lastBatteryLevel = batteryLevel;
+        }
+        lastBatteryRefreshMs = now;
+    }
+
+    if (usbMode) {
+        handleUsbMode(isMouseMode(currentMode));
+    } else {
+        handleBluetoothMode(isMouseMode(currentMode));
+    }
+}
+// SEGMENT C END — Setup And Main Loop
