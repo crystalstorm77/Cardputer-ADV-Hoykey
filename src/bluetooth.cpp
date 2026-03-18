@@ -1,6 +1,7 @@
 // SEGMENT A START — Bluetooth Includes And Global State
 #include "bluetooth.h"
 #include <BLESecurity.h>
+#include <BLE2902.h>
 
 #include "hotkeys.h"
 
@@ -12,10 +13,17 @@ bool bluetoothIsConnected = false;
 namespace {
 BLEServer* bleServer = nullptr;
 BLEAdvertising* bleAdvertising = nullptr;
+BLE2902* mouseInput2902 = nullptr;
+BLE2902* keyboardInput2902 = nullptr;
+
 bool bluetoothAdvertising = false;
+bool bluetoothNeedsNotificationRearm = false;
+
 unsigned long lastBleAdvertisingRefreshMs = 0;
+unsigned long lastBleNotificationRearmMs = 0;
 
 constexpr unsigned long kBleAdvertisingRefreshMs = 2000UL;
+constexpr unsigned long kBleNotificationRearmDelayMs = 250UL;
 
 void sendKeyboardReport(uint8_t modifier, const uint8_t keycode[6]) {
     if (keyboardInput == nullptr) {
@@ -64,6 +72,32 @@ void ensureBleAdvertising() {
         startBleAdvertisingInternal();
     }
 }
+
+void setDescriptorNotifications(BLE2902* descriptor, bool enabled) {
+    if (descriptor == nullptr) {
+        return;
+    }
+
+    descriptor->setNotifications(enabled);
+    descriptor->setIndications(false);
+}
+
+void rearmInputNotificationsIfNeeded() {
+    if (!bluetoothIsConnected || !bluetoothNeedsNotificationRearm) {
+        return;
+    }
+
+    const unsigned long now = millis();
+    if ((now - lastBleNotificationRearmMs) < kBleNotificationRearmDelayMs) {
+        return;
+    }
+
+    setDescriptorNotifications(mouseInput2902, true);
+    setDescriptorNotifications(keyboardInput2902, true);
+
+    bluetoothNeedsNotificationRearm = false;
+    sendEmptyReports();
+}
 }  // namespace
 // SEGMENT A END — Bluetooth Includes And Global State
 
@@ -71,12 +105,14 @@ void ensureBleAdvertising() {
 void MyBLEServerCallbacks::onConnect(BLEServer* pServer) {
     bluetoothIsConnected = true;
     bluetoothAdvertising = false;
-    sendEmptyReports();
+    bluetoothNeedsNotificationRearm = true;
+    lastBleNotificationRearmMs = millis();
 }
 
 void MyBLEServerCallbacks::onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) {
     bluetoothIsConnected = false;
     bluetoothAdvertising = false;
+    bluetoothNeedsNotificationRearm = false;
     sendEmptyReports();
 
     delay(50);
@@ -175,8 +211,14 @@ void sendEmptyReports() {
 
 void handleBluetoothMode(DeviceMode currentMode) {
     ensureBleAdvertising();
+    rearmInputNotificationsIfNeeded();
 
     if (!bluetoothIsConnected) {
+        delay(7);
+        return;
+    }
+
+    if (bluetoothNeedsNotificationRearm) {
         delay(7);
         return;
     }
@@ -215,6 +257,25 @@ void initBluetooth() {
     mouseInput = hid->inputReport(1);
     keyboardInput = hid->inputReport(2);
 
+    BLEDescriptor* mouseDescriptor = mouseInput->getDescriptorByUUID("2902");
+    if (mouseDescriptor == nullptr) {
+        mouseInput2902 = new BLE2902();
+        mouseInput->addDescriptor(mouseInput2902);
+    } else {
+        mouseInput2902 = static_cast<BLE2902*>(mouseDescriptor);
+    }
+
+    BLEDescriptor* keyboardDescriptor = keyboardInput->getDescriptorByUUID("2902");
+    if (keyboardDescriptor == nullptr) {
+        keyboardInput2902 = new BLE2902();
+        keyboardInput->addDescriptor(keyboardInput2902);
+    } else {
+        keyboardInput2902 = static_cast<BLE2902*>(keyboardDescriptor);
+    }
+
+    setDescriptorNotifications(mouseInput2902, true);
+    setDescriptorNotifications(keyboardInput2902, true);
+
     hid->manufacturer()->setValue("M5Stack");
     hid->pnp(0x02, 0x1234, 0x5678, 0x0100);
     hid->hidInfo(0x00, 0x01);
@@ -232,6 +293,7 @@ void initBluetooth() {
     pSecurity->setKeySize(16);
     pSecurity->setInitEncryptionKey(ESP_BLE_ENC_KEY_MASK | ESP_BLE_ID_KEY_MASK);
 
+    bluetoothNeedsNotificationRearm = false;
     startBleAdvertisingInternal();
 }
 
@@ -239,6 +301,10 @@ void deinitBluetooth() {
     stopBleAdvertisingInternal();
 
     bluetoothIsConnected = false;
+    bluetoothNeedsNotificationRearm = false;
+
+    mouseInput2902 = nullptr;
+    keyboardInput2902 = nullptr;
     bleAdvertising = nullptr;
     bleServer = nullptr;
 
