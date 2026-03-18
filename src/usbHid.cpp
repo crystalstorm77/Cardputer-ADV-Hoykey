@@ -22,12 +22,23 @@ void ensureKeyboardReady() {
     }
 }
 
-void sendUsbKeyReport(const HotkeyReport& hotkeyReport) {
+void sendUsbHotkeyReport(const HotkeyReport& hotkeyReport) {
     KeyReport report = {0};
     report.modifiers = hotkeyReport.modifiers;
 
     for (uint8_t i = 0; i < 6; ++i) {
         report.keys[i] = hotkeyReport.keys[i];
+    }
+
+    keyboard.sendReport(&report);
+}
+
+void sendUsbKeyboardModeReport(const KeyboardModeReport& keyboardModeReport) {
+    KeyReport report = {0};
+    report.modifiers = keyboardModeReport.modifiers;
+
+    for (uint8_t i = 0; i < 6; ++i) {
+        report.keys[i] = keyboardModeReport.keys[i];
     }
 
     keyboard.sendReport(&report);
@@ -97,37 +108,13 @@ void usbKeyboard() {
     }
 
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    KeyboardModeReport report = {};
+    buildKeyboardModeReport(status, report);
 
-    KeyReport report = {0};
-    report.modifiers = status.modifiers;
-
-    uint8_t idx = 0;
-    for (auto k : status.hid_keys) {
-        if (idx < 6) {
-            report.keys[idx++] = k;
-        } else {
-            break;
-        }
-    }
-
-    if (M5Cardputer.Keyboard.isKeyPressed(' ')) {
-        const uint8_t hidSpace = 0x2C;
-        bool present = false;
-        for (uint8_t i = 0; i < idx; ++i) {
-            if (report.keys[i] == hidSpace) {
-                present = true;
-                break;
-            }
-        }
-        if (!present && idx < 6) {
-            report.keys[idx++] = hidSpace;
-        }
-    }
-
-    if (idx == 0 && report.modifiers == 0) {
-        keyboard.releaseAll();
+    if (keyboardModeReportHasOutput(report)) {
+        sendUsbKeyboardModeReport(report);
     } else {
-        keyboard.sendReport(&report);
+        keyboard.releaseAll();
     }
 }
 
@@ -142,7 +129,7 @@ void usbHotkey() {
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
 
     if (buildHotkeyReport(status, hotkeyReport)) {
-        sendUsbKeyReport(hotkeyReport);
+        sendUsbHotkeyReport(hotkeyReport);
     } else {
         keyboard.releaseAll();
     }
