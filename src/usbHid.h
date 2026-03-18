@@ -1,12 +1,13 @@
+// SEGMENT A START — USB HID Includes And Declarations
 #ifndef USBHID_H
 #define USBHID_H
 
-#include "USBHIDMouse.h"
-#include "USBHIDKeyboard.h"
-#include <M5Cardputer.h>
+#include "display.h"
 
 void usbMouse();
 void usbKeyboard();
-void handleUsbMode(bool mouseMode);
+void usbHotkey();
+void handleUsbMode(DeviceMode currentMode);
 
 #endif
+// SEGMENT A END — USB HID Includes And Declarations

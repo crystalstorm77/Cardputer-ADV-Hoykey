@@ -106,9 +106,9 @@ void loop() {
     }
 
     if (usbMode) {
-        handleUsbMode(isMouseMode(currentMode));
+        handleUsbMode(currentMode);
     } else {
-        handleBluetoothMode(isMouseMode(currentMode));
+        handleBluetoothMode(currentMode);
     }
 }
 // SEGMENT C END — Setup And Main Loop
