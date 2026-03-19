@@ -155,6 +155,38 @@ void displayMainScreen(bool usbMode, DeviceMode currentMode, bool bluetoothStatu
     drawModeCards(currentMode);
 }
 
+void drawKeyboardDebugOverlay(const char* line1, const char* line2, const char* line3, const char* line4, const char* line5) {
+    const int boxX = 6;
+    const int boxY = 68;
+    const int boxW = 228;
+    const int boxH = 60;
+
+    M5Cardputer.Display.fillRoundRect(boxX, boxY, boxW, boxH, 4, TFT_BLACK);
+    M5Cardputer.Display.drawRoundRect(boxX, boxY, boxW, boxH, 4, TFT_WHITE);
+
+    M5Cardputer.Display.setTextSize(1);
+
+    M5Cardputer.Display.setTextColor(TFT_YELLOW, TFT_BLACK);
+    M5Cardputer.Display.setCursor(boxX + 6, boxY + 4);
+    M5Cardputer.Display.print("Keyboard debug");
+
+    M5Cardputer.Display.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    M5Cardputer.Display.setCursor(boxX + 6, boxY + 14);
+    M5Cardputer.Display.print(line1);
+
+    M5Cardputer.Display.setCursor(boxX + 6, boxY + 24);
+    M5Cardputer.Display.print(line2);
+
+    M5Cardputer.Display.setCursor(boxX + 6, boxY + 34);
+    M5Cardputer.Display.print(line3);
+
+    M5Cardputer.Display.setCursor(boxX + 6, boxY + 44);
+    M5Cardputer.Display.print(line4);
+
+    M5Cardputer.Display.setCursor(boxX + 6, boxY + 54);
+    M5Cardputer.Display.print(line5);
+}
+
 void displaySelectionScreen(bool usbMode) {
     M5Cardputer.Display.clear();
     M5Cardputer.Display.setTextSize(1);

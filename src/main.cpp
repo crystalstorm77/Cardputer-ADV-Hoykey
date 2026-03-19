@@ -1,6 +1,7 @@
 // SEGMENT A START — Includes And Global State
 #include <M5Cardputer.h>
 #include <USB.h>
+#include <cstdio>
 
 #include "bluetooth.h"
 #include "display.h"
@@ -11,19 +12,6 @@ bool usbMode = true;
 bool lastBluetoothStatus = false;
 int lastBatteryLevel = -1;
 unsigned long lastBatteryRefreshMs = 0;
-
-const char* modeName(DeviceMode mode) {
-    switch (mode) {
-        case DeviceMode::Keyboard:
-            return "Keyboard";
-        case DeviceMode::Mouse:
-            return "Mouse";
-        case DeviceMode::Hotkey:
-            return "Hotkey";
-        default:
-            return "Unknown";
-    }
-}
 
 DeviceMode nextMode(DeviceMode mode) {
     switch (mode) {
@@ -41,101 +29,86 @@ bool isMouseMode(DeviceMode mode) {
     return mode == DeviceMode::Mouse;
 }
 
-void printCharDebugValue(const char* label, char value) {
+void formatDebugChar(char value, char* output, size_t outputSize) {
     const uint8_t rawValue = static_cast<uint8_t>(value);
 
-    Serial.printf("%s=%u", label, rawValue);
-    if (rawValue >= 32 && rawValue <= 126) {
-        Serial.printf("('%c')", value);
+    if (rawValue == 0) {
+        std::snprintf(output, outputSize, "0");
+    } else if (rawValue >= 32 && rawValue <= 126) {
+        std::snprintf(output, outputSize, "%u:%c", rawValue, value);
+    } else {
+        std::snprintf(output, outputSize, "%u", rawValue);
     }
 }
 
-void printUint8Vector(const char* label, const std::vector<uint8_t>& values) {
-    Serial.printf("%s[%u]=", label, static_cast<unsigned>(values.size()));
-    if (values.empty()) {
-        Serial.println("[]");
-        return;
-    }
-
-    Serial.print("[");
-    for (size_t i = 0; i < values.size(); ++i) {
-        Serial.print(values[i]);
-        if ((values[i] >= 32) && (values[i] <= 126)) {
-            Serial.printf("('%c')", static_cast<char>(values[i]));
-        }
-        if (i + 1 < values.size()) {
-            Serial.print(", ");
-        }
-    }
-    Serial.println("]");
-}
-
-void printWordVector(const std::vector<char>& values) {
-    Serial.printf("word[%u]=", static_cast<unsigned>(values.size()));
-    if (values.empty()) {
-        Serial.println("[]");
-        return;
-    }
-
-    Serial.print("[");
-    for (size_t i = 0; i < values.size(); ++i) {
-        const uint8_t rawValue = static_cast<uint8_t>(values[i]);
-        Serial.print(rawValue);
-        if ((rawValue >= 32) && (rawValue <= 126)) {
-            Serial.printf("('%c')", values[i]);
-        }
-        if (i + 1 < values.size()) {
-            Serial.print(", ");
-        }
-    }
-    Serial.println("]");
-}
-
-void printPhysicalKeyList() {
+void buildPhysicalKeyLine(size_t index, char* output, size_t outputSize) {
     const auto& keyList = M5Cardputer.Keyboard.keyList();
-    Serial.printf("keyList[%u]\n", static_cast<unsigned>(keyList.size()));
 
-    for (size_t i = 0; i < keyList.size(); ++i) {
-        const auto& keyPos = keyList[i];
-        const auto keyValue = M5Cardputer.Keyboard.getKeyValue(keyPos);
-
-        Serial.printf("  #%u pos=(%d,%d) ", static_cast<unsigned>(i), keyPos.x, keyPos.y);
-        printCharDebugValue("first", keyValue.value_first);
-        Serial.print(" ");
-        printCharDebugValue("second", keyValue.value_second);
-        Serial.println();
+    if (index >= keyList.size()) {
+        std::snprintf(output, outputSize, "p%u: -", static_cast<unsigned>(index));
+        return;
     }
+
+    const auto& keyPos = keyList[index];
+    const auto keyValue = M5Cardputer.Keyboard.getKeyValue(keyPos);
+
+    char firstValue[16];
+    char secondValue[16];
+    formatDebugChar(keyValue.value_first, firstValue, sizeof(firstValue));
+    formatDebugChar(keyValue.value_second, secondValue, sizeof(secondValue));
+
+    std::snprintf(
+        output,
+        outputSize,
+        "p%u %d,%d f=%s s=%s",
+        static_cast<unsigned>(index),
+        keyPos.x,
+        keyPos.y,
+        firstValue,
+        secondValue
+    );
 }
 
-void printKeyboardDebugSnapshot() {
+void updateKeyboardDebugOverlay() {
     auto& status = M5Cardputer.Keyboard.keysState();
 
-    Serial.println();
-    Serial.println("=== CARDPUTER KEY DEBUG ===");
-    Serial.printf("mode=%s usbMode=%d pressed=%d changed=%d capsLocked=%d\n",
-                  modeName(currentMode),
-                  usbMode ? 1 : 0,
-                  M5Cardputer.Keyboard.isPressed() ? 1 : 0,
-                  M5Cardputer.Keyboard.isChange() ? 1 : 0,
-                  M5Cardputer.Keyboard.capslocked() ? 1 : 0);
+    const uint8_t hid0 = status.hid_keys.size() > 0 ? status.hid_keys[0] : 0;
+    const uint8_t hid1 = status.hid_keys.size() > 1 ? status.hid_keys[1] : 0;
+    const uint8_t hid2 = status.hid_keys.size() > 2 ? status.hid_keys[2] : 0;
 
-    Serial.printf("flags fn=%d shift=%d ctrl=%d opt=%d alt=%d del=%d enter=%d space=%d modifiers=0x%02X\n",
-                  status.fn ? 1 : 0,
-                  status.shift ? 1 : 0,
-                  status.ctrl ? 1 : 0,
-                  status.opt ? 1 : 0,
-                  status.alt ? 1 : 0,
-                  status.del ? 1 : 0,
-                  status.enter ? 1 : 0,
-                  status.space ? 1 : 0,
-                  status.modifiers);
+    char line1[64];
+    char line2[64];
+    char line3[64];
+    char line4[64];
+    char line5[64];
 
-    printWordVector(status.word);
-    printUint8Vector("hid_keys", status.hid_keys);
-    printUint8Vector("modifier_keys", status.modifier_keys);
-    printPhysicalKeyList();
+    std::snprintf(
+        line1,
+        sizeof(line1),
+        "fn=%d sh=%d ct=%d al=%d dl=%d en=%d",
+        status.fn ? 1 : 0,
+        status.shift ? 1 : 0,
+        status.ctrl ? 1 : 0,
+        status.alt ? 1 : 0,
+        status.del ? 1 : 0,
+        status.enter ? 1 : 0
+    );
 
-    Serial.println("===========================");
+    std::snprintf(
+        line2,
+        sizeof(line2),
+        "hid=%u,%u,%u mods=%02X",
+        hid0,
+        hid1,
+        hid2,
+        status.modifiers
+    );
+
+    buildPhysicalKeyLine(0, line3, sizeof(line3));
+    buildPhysicalKeyLine(1, line4, sizeof(line4));
+    buildPhysicalKeyLine(2, line5, sizeof(line5));
+
+    drawKeyboardDebugOverlay(line1, line2, line3, line4, line5);
 }
 // SEGMENT A END — Includes And Global State
 
@@ -173,13 +146,6 @@ void setup() {
     auto cfg = M5.config();
     M5Cardputer.begin(cfg, true);
 
-    Serial.begin(115200);
-    delay(200);
-    Serial.println();
-    Serial.println("Cardputer keyboard debug active.");
-    Serial.println("Open PlatformIO Serial Monitor at 115200 baud.");
-    Serial.println("Stay in Keyboard mode and test Fn by itself and with the orange-labelled keys.");
-
     setupDisplay();
     displayWelcomeScreen();
     selectMode();
@@ -195,13 +161,23 @@ void setup() {
     lastBatteryRefreshMs = millis();
 
     displayMainScreen(usbMode, currentMode, lastBluetoothStatus, lastBatteryLevel);
+
+    if (currentMode == DeviceMode::Keyboard) {
+        drawKeyboardDebugOverlay(
+            "Press Fn alone first",
+            "Then test Fn+, Fn+;",
+            "Watch p0 / p1 / p2",
+            "Tell me what changes",
+            ""
+        );
+    }
 }
 
 void loop() {
     M5Cardputer.update();
 
     if (currentMode == DeviceMode::Keyboard && M5Cardputer.Keyboard.isChange()) {
-        printKeyboardDebugSnapshot();
+        updateKeyboardDebugOverlay();
     }
 
     const bool bluetoothStatus = getBluetoothStatus();
@@ -214,6 +190,16 @@ void loop() {
     if (M5Cardputer.BtnA.wasPressed()) {
         currentMode = nextMode(currentMode);
         drawModeCards(currentMode);
+
+        if (currentMode == DeviceMode::Keyboard) {
+            drawKeyboardDebugOverlay(
+                "Press Fn alone first",
+                "Then test Fn+, Fn+;",
+                "Watch p0 / p1 / p2",
+                "Tell me what changes",
+                ""
+            );
+        }
     }
 
     const unsigned long now = millis();

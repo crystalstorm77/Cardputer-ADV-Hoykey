@@ -82,13 +82,65 @@ namespace {
 bool gKeyboardSymbolLayerEnabled = false;
 bool gKeyboardShiftKeyWasPressed = false;
 
-bool isFnPhysicalKeyPressed() {
+bool keyListContainsPos(int x, int y) {
     for (const auto& keyPos : M5Cardputer.Keyboard.keyList()) {
-        if (keyPos.x == 0 && keyPos.y == 2) {
+        if (keyPos.x == x && keyPos.y == y) {
             return true;
         }
     }
     return false;
+}
+
+bool isFnPhysicalKeyPressed() {
+    return keyListContainsPos(0, 2);
+}
+
+bool buildFnLayerOverrideReport(KeyboardModeReport& report) {
+    if (!isFnPhysicalKeyPressed()) {
+        return false;
+    }
+
+    bool handled = false;
+
+    // Orange legends, based on the physical key positions you tested:
+    // Fn + top-left key      -> Esc
+    // Fn + top-right key     -> Delete
+    // Fn + ;                 -> Up
+    // Fn + .                 -> Down
+    // Fn + ,                 -> Left
+    // Fn + /                 -> Right
+
+    if (keyListContainsPos(0, 0)) {
+        addKeyToKeyboardModeReport(report, HID_KEY_ESCAPE);
+        handled = true;
+    }
+
+    if (keyListContainsPos(13, 0)) {
+        addKeyToKeyboardModeReport(report, HID_KEY_DELETE);
+        handled = true;
+    }
+
+    if (keyListContainsPos(11, 2)) {
+        addKeyToKeyboardModeReport(report, HID_KEY_UP_ARROW);
+        handled = true;
+    }
+
+    if (keyListContainsPos(11, 3)) {
+        addKeyToKeyboardModeReport(report, HID_KEY_DOWN_ARROW);
+        handled = true;
+    }
+
+    if (keyListContainsPos(10, 3)) {
+        addKeyToKeyboardModeReport(report, HID_KEY_LEFT_ARROW);
+        handled = true;
+    }
+
+    if (keyListContainsPos(12, 3)) {
+        addKeyToKeyboardModeReport(report, HID_KEY_RIGHT_ARROW);
+        handled = true;
+    }
+
+    return handled;
 }
 
 void clearHotkeyReport(HotkeyReport& report) {
@@ -133,36 +185,6 @@ void addKeyToKeyboardModeReport(KeyboardModeReport& report, uint8_t hidKey) {
             report.keys[i] = hidKey;
             return;
         }
-    }
-}
-
-bool isFnMappedHidKey(uint8_t hidKey) {
-    switch (hidKey) {
-        case HID_KEY_GRAVE:
-        case HID_KEY_SEMICOLON:
-        case HID_KEY_COMMA:
-        case HID_KEY_PERIOD:
-        case HID_KEY_SLASH:
-            return true;
-        default:
-            return false;
-    }
-}
-
-uint8_t mapFnLayerHidKey(uint8_t hidKey) {
-    switch (hidKey) {
-        case HID_KEY_GRAVE:
-            return HID_KEY_ESCAPE;
-        case HID_KEY_SEMICOLON:
-            return HID_KEY_UP_ARROW;
-        case HID_KEY_PERIOD:
-            return HID_KEY_DOWN_ARROW;
-        case HID_KEY_COMMA:
-            return HID_KEY_LEFT_ARROW;
-        case HID_KEY_SLASH:
-            return HID_KEY_RIGHT_ARROW;
-        default:
-            return 0;
     }
 }
 
@@ -258,12 +280,11 @@ void buildKeyboardModeReport(const Keyboard_Class::KeysState& status, KeyboardMo
         report.modifiers |= MODIFIER_LEFT_ALT;
     }
 
-    for (auto key : status.hid_keys) {
-        if (fnPressed && isFnMappedHidKey(key)) {
-            addKeyToKeyboardModeReport(report, mapFnLayerHidKey(key));
-            continue;
-        }
+    if (fnPressed && buildFnLayerOverrideReport(report)) {
+        return;
+    }
 
+    for (auto key : status.hid_keys) {
         if (gKeyboardSymbolLayerEnabled && shouldApplyShiftForSymbolLayer(key)) {
             report.modifiers |= MODIFIER_LEFT_SHIFT;
         }
@@ -276,11 +297,7 @@ void buildKeyboardModeReport(const Keyboard_Class::KeysState& status, KeyboardMo
     }
 
     if (status.del) {
-        if (fnPressed) {
-            addKeyToKeyboardModeReport(report, HID_KEY_DELETE);
-        } else {
-            addKeyToKeyboardModeReport(report, HID_KEY_BACKSPACE);
-        }
+        addKeyToKeyboardModeReport(report, HID_KEY_BACKSPACE);
     }
 
     if (M5Cardputer.Keyboard.isKeyPressed(' ')) {

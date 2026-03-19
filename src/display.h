@@ -19,6 +19,7 @@ void displayMainScreen(bool usbMode, DeviceMode currentMode, bool bluetoothStatu
 void modeIndicator(bool usbMode, bool bluetoothStatus);
 void drawModeCards(DeviceMode currentMode);
 void drawBatteryLevel(int batteryLevel);
+void drawKeyboardDebugOverlay(const char* line1, const char* line2, const char* line3, const char* line4, const char* line5);
 // SEGMENT B END — Display Function Declarations
 
 #endif
