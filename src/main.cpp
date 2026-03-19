@@ -151,6 +151,7 @@ void setup() {
     selectMode();
 
     if (usbMode) {
+        initUsbHid();
         USB.begin();
     } else {
         initBluetooth();

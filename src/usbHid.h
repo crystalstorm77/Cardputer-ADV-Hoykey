@@ -4,6 +4,7 @@
 
 #include "display.h"
 
+void initUsbHid();
 void usbMouse();
 void usbKeyboard();
 void usbHotkey();

@@ -14,11 +14,19 @@ USBHIDKeyboard keyboard;
 
 namespace {
 bool keyboardInited = false;
+bool mouseInited = false;
 
 void ensureKeyboardReady() {
     if (!keyboardInited) {
         keyboard.begin();
         keyboardInited = true;
+    }
+}
+
+void ensureMouseReady() {
+    if (!mouseInited) {
+        mouse.begin();
+        mouseInited = true;
     }
 }
 
@@ -44,6 +52,11 @@ void sendUsbKeyboardModeReport(const KeyboardModeReport& keyboardModeReport) {
     keyboard.sendReport(&report);
 }
 }  // namespace
+
+void initUsbHid() {
+    ensureKeyboardReady();
+    ensureMouseReady();
+}
 // SEGMENT A END — USB HID Includes And Global State
 
 // SEGMENT B START — USB HID Input Modes
