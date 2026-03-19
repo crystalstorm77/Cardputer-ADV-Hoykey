@@ -15,7 +15,12 @@ BLEAdvertising* bleAdvertising = nullptr;
 bool bluetoothAdvertising = false;
 unsigned long lastBleAdvertisingRefreshMs = 0;
 
+bool bluetoothReconnectSettling = false;
+unsigned long bluetoothConnectedAtMs = 0;
+bool bluetoothHadActiveInput = false;
+
 constexpr unsigned long kBleAdvertisingRefreshMs = 2000UL;
+constexpr unsigned long kBleReconnectSettleMs = 350UL;
 
 void sendKeyboardReport(uint8_t modifier, const uint8_t keycode[6]) {
     if (keyboardInput == nullptr) {
@@ -63,6 +68,25 @@ void ensureBleAdvertising() {
         startBleAdvertisingInternal();
     }
 }
+
+bool bluetoothReadyForReports() {
+    if (!bluetoothIsConnected) {
+        return false;
+    }
+
+    if (!bluetoothReconnectSettling) {
+        return true;
+    }
+
+    const unsigned long now = millis();
+    if ((now - bluetoothConnectedAtMs) < kBleReconnectSettleMs) {
+        return false;
+    }
+
+    bluetoothReconnectSettling = false;
+    sendEmptyReports();
+    return true;
+}
 }  // namespace
 // SEGMENT A END — Bluetooth Includes And Global State
 
@@ -70,12 +94,16 @@ void ensureBleAdvertising() {
 void MyBLEServerCallbacks::onConnect(BLEServer* pServer) {
     bluetoothIsConnected = true;
     bluetoothAdvertising = false;
-    sendEmptyReports();
+    bluetoothReconnectSettling = true;
+    bluetoothConnectedAtMs = millis();
+    bluetoothHadActiveInput = false;
 }
 
 void MyBLEServerCallbacks::onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) {
     bluetoothIsConnected = false;
     bluetoothAdvertising = false;
+    bluetoothReconnectSettling = false;
+    bluetoothHadActiveInput = false;
     sendEmptyReports();
 
     delay(50);
@@ -161,13 +189,16 @@ void sendEmptyReports() {
 void handleBluetoothMode(DeviceMode currentMode) {
     ensureBleAdvertising();
 
-    if (!bluetoothIsConnected) {
+    if (!bluetoothReadyForReports()) {
         delay(7);
         return;
     }
 
     if (!M5Cardputer.Keyboard.isPressed()) {
-        sendEmptyReports();
+        if (bluetoothHadActiveInput) {
+            sendEmptyReports();
+            bluetoothHadActiveInput = false;
+        }
         delay(7);
         return;
     }
@@ -185,6 +216,7 @@ void handleBluetoothMode(DeviceMode currentMode) {
             break;
     }
 
+    bluetoothHadActiveInput = true;
     delay(7);
 }
 // SEGMENT B END — Bluetooth Input Modes
