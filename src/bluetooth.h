@@ -1,58 +1,38 @@
-// SEGMENT A START — Bluetooth Includes And HID Report Map
+// SEGMENT A START — Bluetooth Includes And Globals
 #ifndef BLUETOOTH_H
 #define BLUETOOTH_H
 
 #include <Arduino.h>
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEServer.h>
-#include "BLEHIDDevice.h"
-#include "HIDTypes.h"
-#include "HIDKeyboardTypes.h"
+
+// M5Cardputer defines these as macros in Keyboard_def.h.
+// ESP32 BLE Keyboard defines constants with the same names in BleKeyboard.h.
+// Undef them here before including BleKeyboard.h so both libraries can coexist.
+#ifdef KEY_LEFT_CTRL
+#undef KEY_LEFT_CTRL
+#endif
+
+#ifdef KEY_LEFT_SHIFT
+#undef KEY_LEFT_SHIFT
+#endif
+
+#ifdef KEY_LEFT_ALT
+#undef KEY_LEFT_ALT
+#endif
+
+#ifdef KEY_BACKSPACE
+#undef KEY_BACKSPACE
+#endif
+
+#ifdef KEY_TAB
+#undef KEY_TAB
+#endif
+
+#include <BleKeyboard.h>
 #include "display.h"
 
-extern BLEHIDDevice* hid;
-extern BLECharacteristic* mouseInput;
-extern BLECharacteristic* keyboardInput;
+extern BleKeyboard bleKeyboard;
 extern bool bluetoothIsConnected;
-
-const uint8_t HID_REPORT_MAP[] = {
-    // Keyboard report only
-    0x05, 0x01,
-    0x09, 0x06,
-    0xA1, 0x01,
-    0x85, 0x01,
-    0x05, 0x07,
-    0x19, 0xE0,
-    0x29, 0xE7,
-    0x15, 0x00,
-    0x25, 0x01,
-    0x75, 0x01,
-    0x95, 0x08,
-    0x81, 0x02,
-    0x95, 0x01,
-    0x75, 0x08,
-    0x81, 0x01,
-    0x95, 0x05,
-    0x75, 0x01,
-    0x05, 0x08,
-    0x19, 0x01,
-    0x29, 0x05,
-    0x91, 0x02,
-    0x95, 0x01,
-    0x75, 0x03,
-    0x91, 0x01,
-    0x95, 0x06,
-    0x75, 0x08,
-    0x15, 0x00,
-    0x26, 0x73, 0x00,
-    0x05, 0x07,
-    0x19, 0x00,
-    0x29, 0x73,
-    0x81, 0x00,
-    0xC0
-};
-// SEGMENT A END — Bluetooth Includes And HID Report Map
+// SEGMENT A END — Bluetooth Includes And Globals
 
 // SEGMENT B START — Bluetooth Function Declarations
 void initBluetooth();
@@ -64,12 +44,6 @@ void bluetoothKeyboard();
 void bluetoothHotkey();
 void sendEmptyReports();
 void handleBluetoothMode(DeviceMode currentMode);
-
-class MyBLEServerCallbacks : public BLEServerCallbacks {
-public:
-    void onConnect(BLEServer* pServer) override;
-    void onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) override;
-};
 
 #endif // BLUETOOTH_H
 // SEGMENT B END — Bluetooth Function Declarations
