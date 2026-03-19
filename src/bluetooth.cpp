@@ -123,29 +123,15 @@ void bluetoothMouse() {
 }
 
 void bluetoothKeyboard() {
-    uint8_t modifier = 0;
-    uint8_t keycode[6] = {0};
-
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    KeyboardModeReport report = {};
+    buildKeyboardModeReport(status, report);
 
-    int count = 0;
-    for (auto key : status.hid_keys) {
-        if (count < 6) {
-            keycode[count++] = key;
-        } else {
-            break;
-        }
+    if (keyboardModeReportHasOutput(report)) {
+        sendKeyboardReport(report.modifiers, report.keys);
+    } else {
+        sendEmptyReports();
     }
-
-    if (M5Cardputer.Keyboard.isKeyPressed(' ') && count < 6) {
-        keycode[count++] = 0x2C;
-    }
-
-    if (status.ctrl)  modifier |= 0x01;
-    if (status.shift) modifier |= 0x02;
-    if (status.alt)   modifier |= 0x04;
-
-    sendKeyboardReport(modifier, keycode);
 }
 
 void bluetoothHotkey() {
