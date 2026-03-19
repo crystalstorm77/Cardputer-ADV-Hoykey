@@ -15,12 +15,7 @@ BLEAdvertising* bleAdvertising = nullptr;
 bool bluetoothAdvertising = false;
 unsigned long lastBleAdvertisingRefreshMs = 0;
 
-bool bluetoothReconnectSettling = false;
-unsigned long bluetoothConnectedAtMs = 0;
-bool bluetoothHadActiveInput = false;
-
 constexpr unsigned long kBleAdvertisingRefreshMs = 2000UL;
-constexpr unsigned long kBleReconnectSettleMs = 350UL;
 
 void sendKeyboardReport(uint8_t modifier, const uint8_t keycode[6]) {
     if (keyboardInput == nullptr) {
@@ -68,25 +63,6 @@ void ensureBleAdvertising() {
         startBleAdvertisingInternal();
     }
 }
-
-bool bluetoothReadyForReports() {
-    if (!bluetoothIsConnected) {
-        return false;
-    }
-
-    if (!bluetoothReconnectSettling) {
-        return true;
-    }
-
-    const unsigned long now = millis();
-    if ((now - bluetoothConnectedAtMs) < kBleReconnectSettleMs) {
-        return false;
-    }
-
-    bluetoothReconnectSettling = false;
-    sendEmptyReports();
-    return true;
-}
 }  // namespace
 // SEGMENT A END — Bluetooth Includes And Global State
 
@@ -94,16 +70,12 @@ bool bluetoothReadyForReports() {
 void MyBLEServerCallbacks::onConnect(BLEServer* pServer) {
     bluetoothIsConnected = true;
     bluetoothAdvertising = false;
-    bluetoothReconnectSettling = true;
-    bluetoothConnectedAtMs = millis();
-    bluetoothHadActiveInput = false;
+    sendEmptyReports();
 }
 
 void MyBLEServerCallbacks::onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) {
     bluetoothIsConnected = false;
     bluetoothAdvertising = false;
-    bluetoothReconnectSettling = false;
-    bluetoothHadActiveInput = false;
     sendEmptyReports();
 
     delay(50);
@@ -115,38 +87,9 @@ bool getBluetoothStatus() {
 }
 
 void bluetoothMouse() {
-    int16_t x = 0;
-    int16_t y = 0;
-    uint8_t buttons = 0;
-
-    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-
-    if (status.enter) {
-        buttons |= 0x01;
-    }
-
-    if (M5Cardputer.Keyboard.isKeyPressed('\\')) {
-        buttons |= 0x02;
-    }
-
-    if (M5Cardputer.Keyboard.isKeyPressed(';')) {
-        y -= 1;
-    } else if (M5Cardputer.Keyboard.isKeyPressed('.')) {
-        y += 1;
-    }
-
-    if (M5Cardputer.Keyboard.isKeyPressed('/')) {
-        x += 1;
-    } else if (M5Cardputer.Keyboard.isKeyPressed(',')) {
-        x -= 1;
-    }
-
-    uint8_t report[4] = {buttons, static_cast<uint8_t>(x), static_cast<uint8_t>(y), 0};
-
-    if (mouseInput != nullptr) {
-        mouseInput->setValue(report, sizeof(report));
-        mouseInput->notify();
-    }
+    // Temporary diagnostic: BLE mouse mode disabled so we can test
+    // whether Windows reconnect reliability improves with keyboard-only HID.
+    sendEmptyReports();
 }
 
 void bluetoothKeyboard() {
@@ -173,12 +116,6 @@ void bluetoothHotkey() {
 }
 
 void sendEmptyReports() {
-    if (mouseInput != nullptr) {
-        uint8_t emptyMouseReport[4] = {0, 0, 0, 0};
-        mouseInput->setValue(emptyMouseReport, sizeof(emptyMouseReport));
-        mouseInput->notify();
-    }
-
     if (keyboardInput != nullptr) {
         uint8_t emptyKeyboardReport[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         keyboardInput->setValue(emptyKeyboardReport, sizeof(emptyKeyboardReport));
@@ -189,16 +126,13 @@ void sendEmptyReports() {
 void handleBluetoothMode(DeviceMode currentMode) {
     ensureBleAdvertising();
 
-    if (!bluetoothReadyForReports()) {
+    if (!bluetoothIsConnected) {
         delay(7);
         return;
     }
 
     if (!M5Cardputer.Keyboard.isPressed()) {
-        if (bluetoothHadActiveInput) {
-            sendEmptyReports();
-            bluetoothHadActiveInput = false;
-        }
+        sendEmptyReports();
         delay(7);
         return;
     }
@@ -216,7 +150,6 @@ void handleBluetoothMode(DeviceMode currentMode) {
             break;
     }
 
-    bluetoothHadActiveInput = true;
     delay(7);
 }
 // SEGMENT B END — Bluetooth Input Modes
@@ -229,8 +162,8 @@ void initBluetooth() {
     bleServer->setCallbacks(new MyBLEServerCallbacks());
 
     hid = new BLEHIDDevice(bleServer);
-    mouseInput = hid->inputReport(1);
-    keyboardInput = hid->inputReport(2);
+    mouseInput = nullptr;
+    keyboardInput = hid->inputReport(1);
 
     hid->manufacturer()->setValue("M5Stack");
     hid->pnp(0x02, 0x1234, 0x5678, 0x0100);
