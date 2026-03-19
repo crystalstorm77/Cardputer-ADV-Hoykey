@@ -14,8 +14,11 @@ BLEServer* bleServer = nullptr;
 BLEAdvertising* bleAdvertising = nullptr;
 bool bluetoothAdvertising = false;
 unsigned long lastBleAdvertisingRefreshMs = 0;
+bool bluetoothNeedsCccdRefresh = false;
+unsigned long bluetoothConnectedAtMs = 0;
 
 constexpr unsigned long kBleAdvertisingRefreshMs = 2000UL;
+constexpr unsigned long kBleCccdRefreshDelayMs = 250UL;
 
 void sendKeyboardReport(uint8_t modifier, const uint8_t keycode[6]) {
     if (keyboardInput == nullptr) {
@@ -24,8 +27,7 @@ void sendKeyboardReport(uint8_t modifier, const uint8_t keycode[6]) {
 
     uint8_t report[8] = {
         modifier, 0,
-        keycode[0], keycode[1], keycode[2],
-        keycode[3], keycode[4], keycode[5]
+        keycode[0], keycode[1], keycode[2], keycode[3], keycode[4], keycode[5]
     };
 
     keyboardInput->setValue(report, sizeof(report));
@@ -64,6 +66,37 @@ void ensureBleAdvertising() {
         startBleAdvertisingInternal();
     }
 }
+
+void refreshCharacteristicCccd(BLECharacteristic* characteristic) {
+    if (characteristic == nullptr) {
+        return;
+    }
+
+    BLEDescriptor* desc = characteristic->getDescriptorByUUID(BLEUUID((uint16_t)0x2902));
+    if (desc == nullptr) {
+        return;
+    }
+
+    uint8_t val[] = {0x01, 0x00};
+    desc->setValue(val, sizeof(val));
+}
+
+void refreshInputCccdsIfNeeded() {
+    if (!bluetoothIsConnected || !bluetoothNeedsCccdRefresh) {
+        return;
+    }
+
+    const unsigned long now = millis();
+    if ((now - bluetoothConnectedAtMs) < kBleCccdRefreshDelayMs) {
+        return;
+    }
+
+    refreshCharacteristicCccd(keyboardInput);
+    refreshCharacteristicCccd(mouseInput);
+
+    bluetoothNeedsCccdRefresh = false;
+    sendEmptyReports();
+}
 }  // namespace
 // SEGMENT A END — Bluetooth Includes And Global State
 
@@ -71,12 +104,15 @@ void ensureBleAdvertising() {
 void MyBLEServerCallbacks::onConnect(BLEServer* pServer) {
     bluetoothIsConnected = true;
     bluetoothAdvertising = false;
+    bluetoothNeedsCccdRefresh = true;
+    bluetoothConnectedAtMs = millis();
     sendEmptyReports();
 }
 
 void MyBLEServerCallbacks::onDisconnect(BLEServer* pServer, esp_ble_gatts_cb_param_t* param) {
     bluetoothIsConnected = false;
     bluetoothAdvertising = false;
+    bluetoothNeedsCccdRefresh = false;
     sendEmptyReports();
 
     delay(50);
@@ -161,6 +197,7 @@ void sendEmptyReports() {
 
 void handleBluetoothMode(DeviceMode currentMode) {
     ensureBleAdvertising();
+    refreshInputCccdsIfNeeded();
 
     if (!bluetoothIsConnected) {
         delay(7);
