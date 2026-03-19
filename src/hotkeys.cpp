@@ -82,6 +82,15 @@ namespace {
 bool gKeyboardSymbolLayerEnabled = false;
 bool gKeyboardShiftKeyWasPressed = false;
 
+bool isFnPhysicalKeyPressed() {
+    for (const auto& keyPos : M5Cardputer.Keyboard.keyList()) {
+        if (keyPos.x == 0 && keyPos.y == 2) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void clearHotkeyReport(HotkeyReport& report) {
     report.modifiers = 0;
     for (uint8_t i = 0; i < 6; ++i) {
@@ -240,7 +249,7 @@ void buildKeyboardModeReport(const Keyboard_Class::KeysState& status, KeyboardMo
     clearKeyboardModeReport(report);
     updateKeyboardSymbolLayerToggle();
 
-    const bool fnPressed = status.fn;
+    const bool fnPressed = isFnPhysicalKeyPressed();
 
     if (status.ctrl) {
         report.modifiers |= MODIFIER_LEFT_CTRL;
