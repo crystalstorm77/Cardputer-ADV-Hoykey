@@ -95,6 +95,51 @@ bool isFnPhysicalKeyPressed() {
     return keyListContainsPos(0, 2);
 }
 
+void clearHotkeyReport(HotkeyReport& report) {
+    report.modifiers = 0;
+    for (uint8_t i = 0; i < 6; ++i) {
+        report.keys[i] = 0;
+    }
+}
+
+void clearKeyboardModeReport(KeyboardModeReport& report) {
+    report.modifiers = 0;
+    for (uint8_t i = 0; i < 6; ++i) {
+        report.keys[i] = 0;
+    }
+}
+
+bool statusContainsHidKey(const Keyboard_Class::KeysState& status, uint8_t hidKey) {
+    for (auto key : status.hid_keys) {
+        if (key == hidKey) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool reportAlreadyContainsKey(const KeyboardModeReport& report, uint8_t hidKey) {
+    for (uint8_t i = 0; i < 6; ++i) {
+        if (report.keys[i] == hidKey) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void addKeyToKeyboardModeReport(KeyboardModeReport& report, uint8_t hidKey) {
+    if (hidKey == 0 || reportAlreadyContainsKey(report, hidKey)) {
+        return;
+    }
+
+    for (uint8_t i = 0; i < 6; ++i) {
+        if (report.keys[i] == 0) {
+            report.keys[i] = hidKey;
+            return;
+        }
+    }
+}
+
 bool buildFnLayerOverrideReport(KeyboardModeReport& report) {
     if (!isFnPhysicalKeyPressed()) {
         return false;
@@ -141,51 +186,6 @@ bool buildFnLayerOverrideReport(KeyboardModeReport& report) {
     }
 
     return handled;
-}
-
-void clearHotkeyReport(HotkeyReport& report) {
-    report.modifiers = 0;
-    for (uint8_t i = 0; i < 6; ++i) {
-        report.keys[i] = 0;
-    }
-}
-
-void clearKeyboardModeReport(KeyboardModeReport& report) {
-    report.modifiers = 0;
-    for (uint8_t i = 0; i < 6; ++i) {
-        report.keys[i] = 0;
-    }
-}
-
-bool statusContainsHidKey(const Keyboard_Class::KeysState& status, uint8_t hidKey) {
-    for (auto key : status.hid_keys) {
-        if (key == hidKey) {
-            return true;
-        }
-    }
-    return false;
-}
-
-bool reportAlreadyContainsKey(const KeyboardModeReport& report, uint8_t hidKey) {
-    for (uint8_t i = 0; i < 6; ++i) {
-        if (report.keys[i] == hidKey) {
-            return true;
-        }
-    }
-    return false;
-}
-
-void addKeyToKeyboardModeReport(KeyboardModeReport& report, uint8_t hidKey) {
-    if (hidKey == 0 || reportAlreadyContainsKey(report, hidKey)) {
-        return;
-    }
-
-    for (uint8_t i = 0; i < 6; ++i) {
-        if (report.keys[i] == 0) {
-            report.keys[i] = hidKey;
-            return;
-        }
-    }
 }
 
 bool shouldApplyShiftForSymbolLayer(uint8_t hidKey) {
